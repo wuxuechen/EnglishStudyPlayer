@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">本地视频播放器</string>
+    <string name="select_video_hint">📁 授权后自动扫描本地视频</string>
+    <string name="permission_denied_hint">⚠️ 需要存储权限才能读取本地视频</string>
+    <string name="loading_videos">🔍 正在扫描本地视频...</string>
+    <string name="no_videos_found">📭 未找到视频文件\n请将视频文件放入手机存储中</string>
+    <string name="found_videos">🎬 找到 %d 个视频</string>
+    <string name="permission_denied">权限被拒绝，无法读取视频文件</string>
+    <string name="scanning">正在扫描...</string>
+</resources>
