@@ -7,6 +7,7 @@
     android:background="#000000"
     android:fitsSystemWindows="true">
 
+    <!-- 标题栏 -->
     <TextView
         android:id="@+id/tvTitle"
         android:layout_width="match_parent"
@@ -20,6 +21,7 @@
         android:paddingBottom="8dp"
         android:background="#2a2a2a" />
 
+    <!-- 视频区域 + 进度条 -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -32,7 +34,7 @@
             app:use_controller="false"
             app:resize_mode="fit" />
 
-        <!-- 进度条（细线） -->
+        <!-- 进度条 -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="4dp"
@@ -47,6 +49,7 @@
         </FrameLayout>
     </FrameLayout>
 
+    <!-- 当前播放字幕 -->
     <TextView
         android:id="@+id/tvCurrentSubtitle"
         android:layout_width="match_parent"
@@ -62,6 +65,7 @@
         android:maxLines="3"
         android:ellipsize="end" />
 
+    <!-- 字幕列表标题 -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -71,12 +75,41 @@
         android:padding="8dp"
         android:background="#2a2a2a" />
 
+    <!-- 字幕列表 RecyclerView -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvSubtitles"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="6"
+        android:layout_weight="4"
         android:background="#1a1a1a"
         android:padding="4dp" />
+
+    <!-- 分割线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#444444" />
+
+    <!-- 生僻词区域标题 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📖 生僻词释义"
+        android:textColor="#FFD700"
+        android:textSize="14sp"
+        android:padding="8dp"
+        android:background="#2a2a2a" />
+
+    <!-- 两列网格显示生僻词 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvMeanings"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="2"
+        android:minHeight="80dp"
+        android:padding="4dp"
+        android:background="#1a1a1a"
+        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+        app:spanCount="2" />
 
 </LinearLayout>
