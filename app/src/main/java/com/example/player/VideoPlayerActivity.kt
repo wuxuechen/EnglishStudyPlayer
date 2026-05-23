@@ -16,7 +16,8 @@ import java.io.File
 class VideoPlayerActivity : AppCompatActivity() {
 
     private lateinit var playerView: PlayerView
-    private lateinit var tvName: TextView
+    private lateinit var tvTitle: TextView
+    private lateinit var tvCurrentSubtitle: TextView
     private lateinit var rvSubtitles: RecyclerView
     private lateinit var adapter: SubtitleAdapter
 
@@ -30,12 +31,13 @@ class VideoPlayerActivity : AppCompatActivity() {
         setContentView(R.layout.activity_player)
 
         playerView = findViewById(R.id.playerView)
-        tvName = findViewById(R.id.tvVideoName)
+        tvTitle = findViewById(R.id.tvTitle)
+        tvCurrentSubtitle = findViewById(R.id.tvCurrentSubtitle)
         rvSubtitles = findViewById(R.id.rvSubtitles)
 
         val path = intent.getStringExtra("video_path") ?: return finish()
         val name = intent.getStringExtra("video_name") ?: "视频"
-        tvName.text = name
+        tvTitle.text = name
 
         videoFile = File(path)
         if (!videoFile!!.exists()) {
@@ -46,6 +48,16 @@ class VideoPlayerActivity : AppCompatActivity() {
 
         initPlayer()
         loadSubtitles()
+
+        // 点击当前播放的字幕区域，重新播放当前字幕
+        tvCurrentSubtitle.setOnClickListener {
+            if (currentPlayingPos >= 0 && currentPlayingPos < subtitles.size) {
+                val currentSub = subtitles[currentPlayingPos]
+                playSubtitle(currentSub, currentPlayingPos)
+            } else {
+                Toast.makeText(this, "没有正在播放的字幕", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun initPlayer() {
@@ -83,6 +95,9 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun playSubtitle(sub: Subtitle, pos: Int) {
         val player = exoPlayer ?: return
 
+        // 更新顶部当前播放字幕显示
+        tvCurrentSubtitle.text = sub.text
+
         val mediaItem = MediaItem.Builder()
             .setUri(Uri.fromFile(videoFile))
             .setClippingConfiguration(
@@ -93,34 +108,23 @@ class VideoPlayerActivity : AppCompatActivity() {
             )
             .build()
 
-        // 停止之前的播放监听
-        player.removeListener(playbackListener)
-        // 添加新的完成监听
-        player.addListener(playbackListener)
-
         player.setMediaItem(mediaItem)
         player.prepare()
         player.play()
 
-        // 更新高亮
         currentPlayingPos = pos
         adapter.setCurrentPlayingPosition(pos)
-        rvSubtitles.smoothScrollToPosition(pos)
 
-        Toast.makeText(this, "▶ ${sub.text.take(30)}", Toast.LENGTH_SHORT).show()
-    }
-
-    // 播放完成监听器
-    private val playbackListener = object : Player.Listener {
-        override fun onPlaybackStateChanged(state: Int) {
-            if (state == Player.STATE_ENDED) {
-                // 播放结束，清除当前播放高亮（但永久标记仍然存在，由 adapter 内部维护）
-                runOnUiThread {
-                    currentPlayingPos = -1
-                    adapter.setCurrentPlayingPosition(-1)
-                }
+        // 自动滚动：让下一个 item 置顶
+        rvSubtitles.post {
+            val nextPos = pos + 1
+            if (nextPos < subtitles.size) {
+                val layoutManager = rvSubtitles.layoutManager as LinearLayoutManager
+                layoutManager.scrollToPositionWithOffset(nextPos, 0)
             }
         }
+
+        Toast.makeText(this, "▶ ${sub.text.take(30)}", Toast.LENGTH_SHORT).show()
     }
 
     override fun onPause() {
