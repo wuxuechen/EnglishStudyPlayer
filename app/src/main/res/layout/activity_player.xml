@@ -34,7 +34,6 @@
             app:use_controller="false"
             app:resize_mode="fit" />
 
-        <!-- 进度条 -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="4dp"
@@ -100,7 +99,7 @@
         android:padding="8dp"
         android:background="#2a2a2a" />
 
-    <!-- 两列网格显示生僻词 -->
+    <!-- 单列显示生僻词释义 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvMeanings"
         android:layout_width="match_parent"
@@ -109,7 +108,6 @@
         android:minHeight="80dp"
         android:padding="4dp"
         android:background="#1a1a1a"
-        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-        app:spanCount="2" />
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
 </LinearLayout>

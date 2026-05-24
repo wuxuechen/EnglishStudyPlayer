@@ -1,6 +1,8 @@
 package com.example.player
 
 import android.content.Context
+import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
 import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Bundle
@@ -16,15 +18,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
-import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import org.xmlpull.v1.XmlPullParser
-import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
+import java.io.FileOutputStream
 
 class VideoPlayerActivity : AppCompatActivity() {
 
@@ -42,6 +39,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     private var subtitles = listOf<Subtitle>()
     private var currentPlayingPos = -1
 
+    private lateinit var db: SQLiteDatabase
     private val backgroundThread = HandlerThread("WordLookup").apply { start() }
     private val backgroundHandler = Handler(backgroundThread.looper)
     private val uiHandler = Handler(Looper.getMainLooper())
@@ -68,6 +66,8 @@ class VideoPlayerActivity : AppCompatActivity() {
             return
         }
 
+        // 初始化数据库
+        initDatabase()
         // 初始化常用词库
         CommonWords.init(this)
 
@@ -84,8 +84,20 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
 
         meaningsAdapter = RareWordAdapter()
-        rvMeanings.layoutManager = GridLayoutManager(this, 2)
+        rvMeanings.layoutManager = LinearLayoutManager(this)
         rvMeanings.adapter = meaningsAdapter
+    }
+
+    private fun initDatabase() {
+        val dbFile = File(filesDir, "englishwords.db")
+        if (!dbFile.exists()) {
+            assets.open("englishwords.db").use { input ->
+                FileOutputStream(dbFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+        db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
     }
 
     private fun initPlayer() {
@@ -167,27 +179,21 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun isNetworkAvailable(): Boolean {
-        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val activeNetwork = cm.activeNetworkInfo
-        return activeNetwork != null && activeNetwork.isConnectedOrConnecting
-    }
-
     private fun extractWords(text: String): List<String> {
-        val cleaned = text.replace(Regex("[^a-zA-Z\\s]"), "")
-        return cleaned.split(Regex("\\s+")).filter { it.length > 1 && it.all(Char::isLetter) }
+        val regex = Regex("""[a-zA-Z']{2,}""")
+        return regex.findAll(text)
+            .map { it.value.lowercase() }
+            .toList()
+            .filter { word ->
+                word.isNotEmpty() && word.any { it.isLetter() } && !word.matches(Regex("^'+$"))
+            }
+            .distinct()
     }
 
     private fun fetchMeaningsForSubtitle(subtitle: Subtitle) {
         meaningsAdapter.submitList(emptyList())
 
-        if (!isNetworkAvailable()) {
-            meaningsAdapter.setOffline()
-            return
-        }
-
         val allWords = extractWords(subtitle.text)
-        // 过滤掉常见词（top 1500）
         val rareWords = allWords.filter { it.length > 1 && !CommonWords.isCommonWord(it) }.distinct()
 
         if (rareWords.isEmpty()) {
@@ -213,38 +219,27 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun lookupWordMeaningSync(word: String): MeaningItem {
-        return try {
-            val url = URL("http://dict.cn/ws.php?q=${URLEncoder.encode(word, "utf-8")}")
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
-
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val parser = XmlPullParserFactory.newInstance().newPullParser()
-                parser.setInput(connection.inputStream, "UTF-8")
-                var eventType = parser.eventType
-                var currentMeaning = ""
-                while (eventType != XmlPullParser.END_DOCUMENT) {
-                    if (eventType == XmlPullParser.START_TAG && parser.name == "def") {
-                        currentMeaning = parser.nextText().trim()
-                        break
-                    }
-                    eventType = parser.next()
-                }
-                if (currentMeaning.isNotEmpty()) {
-                    MeaningItem(word, currentMeaning)
-                } else {
-                    MeaningItem(word, "暂无释义")
-                }
-            } else {
-                Log.e("DictAPI", "HTTP error: ${connection.responseCode}")
-                MeaningItem(word, "查询失败")
+        var cursor: Cursor? = null
+        try {
+            cursor = db.query(
+                "englishwords",                    // 表名
+                arrayOf("word", "pronunciation", "meaning"), // 列名
+                "LOWER(word) = LOWER(?)",          // 忽略大小写匹配
+                arrayOf(word),
+                null, null, null
+            )
+            if (cursor != null && cursor.moveToFirst()) {
+                val wordValue = cursor.getString(0)   // word
+                val pronounce = cursor.getString(1)   // pronunciation
+                val meaning = cursor.getString(2)     // meaning
+                return MeaningItem(wordValue, pronounce, meaning)
             }
         } catch (e: Exception) {
-            Log.e("DictAPI", "Exception: ${e.message}")
-            MeaningItem(word, "网络错误")
+            e.printStackTrace()
+        } finally {
+            cursor?.close()
         }
+        return MeaningItem(word, "", "暂无释义")
     }
 
     override fun onPause() {
@@ -257,5 +252,6 @@ class VideoPlayerActivity : AppCompatActivity() {
         backgroundThread.quitSafely()
         exoPlayer?.release()
         exoPlayer = null
+        db.close()
     }
 }
