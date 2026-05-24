@@ -218,28 +218,58 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun lookupWordMeaningSync(word: String): MeaningItem {
-        var cursor: Cursor? = null
-        try {
-            cursor = db.query(
-                "englishwords",                    // 表名
-                arrayOf("word", "pronunciation", "meaning"), // 列名
-                "LOWER(word) = LOWER(?)",          // 忽略大小写匹配
-                arrayOf(word),
-                null, null, null
-            )
-            if (cursor != null && cursor.moveToFirst()) {
-                val wordValue = cursor.getString(0)   // word
-                val pronounce = cursor.getString(1)   // pronunciation
-                val meaning = cursor.getString(2)     // meaning
-                return MeaningItem(wordValue, pronounce, meaning)
+    /**
+     * 返回候选词列表（原词 + 可能的原形），顺序为原词优先
+     */
+    private fun getWordCandidates(original: String): List<String> {
+        val candidates = mutableListOf(original)
+        val w = original.lowercase()
+        when {
+            w.endsWith("ies") && w.length > 3 -> candidates.add(w.dropLast(3) + "y")   // studies -> study
+            w.endsWith("ves") && w.length > 3 -> candidates.add(w.dropLast(3) + "fe") // knives -> knife
+            w.endsWith("es") && w.length > 2 -> candidates.add(w.dropLast(2))         // watches -> watch
+            w.endsWith("s") && w.length > 1 && !w.endsWith("ss") && !w.endsWith("us") && !w.endsWith("is") ->
+                candidates.add(w.dropLast(1))                                          // cats -> cat
+            w.endsWith("ing") && w.length > 3 -> {
+                candidates.add(w.dropLast(3))                                          // playing -> play
+                if (w.length > 4 && w[w.length-4] == w[w.length-5])                    // running -> run
+                    candidates.add(w.dropLast(4))
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        } finally {
-            cursor?.close()
+            w.endsWith("ed") && w.length > 2 -> {
+                candidates.add(w.dropLast(2))                                          // played -> play
+                if (w.length > 3 && w[w.length-3] == w[w.length-4])                    // stopped -> stop
+                    candidates.add(w.dropLast(3))
+            }
+            w.endsWith("er") && w.length > 2 -> candidates.add(w.dropLast(2))          // smaller -> small
+            w.endsWith("est") && w.length > 3 -> candidates.add(w.dropLast(3))         // smallest -> small
         }
-        return MeaningItem(word, "", "暂无释义")
+        return candidates.distinct()
+    }
+
+    private fun lookupWordMeaningSync(originalWord: String): MeaningItem {
+        val candidates = getWordCandidates(originalWord)
+        for (candidate in candidates) {
+            var cursor: Cursor? = null
+            try {
+                cursor = db.query(
+                    "englishwords",                // 你的表名
+                    arrayOf("word", "pronunciation", "meaning"),
+                    "LOWER(word) = LOWER(?)",
+                    arrayOf(candidate),
+                    null, null, null
+                )
+                if (cursor != null && cursor.moveToFirst()) {
+                    val pronounce = cursor.getString(1)
+                    val meaning = cursor.getString(2)
+                    return MeaningItem(originalWord, pronounce, meaning)   // 单词显示原始形式
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                cursor?.close()
+            }
+        }
+        return MeaningItem(originalWord, "", "暂无释义")
     }
 
     override fun onPause() {
