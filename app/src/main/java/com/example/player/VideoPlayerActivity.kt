@@ -218,31 +218,102 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
     }
 
+
     /**
      * 返回候选词列表（原词 + 可能的原形），顺序为原词优先
      */
     private fun getWordCandidates(original: String): List<String> {
         val candidates = mutableListOf(original)
         val w = original.lowercase()
+
         when {
-            w.endsWith("ies") && w.length > 3 -> candidates.add(w.dropLast(3) + "y")   // studies -> study
-            w.endsWith("ves") && w.length > 3 -> candidates.add(w.dropLast(3) + "fe") // knives -> knife
-            w.endsWith("es") && w.length > 2 -> candidates.add(w.dropLast(2))         // watches -> watch
-            w.endsWith("s") && w.length > 1 && !w.endsWith("ss") && !w.endsWith("us") && !w.endsWith("is") ->
-                candidates.add(w.dropLast(1))                                          // cats -> cat
+            // 复数：-ies 变 y
+            w.endsWith("ies") && w.length > 3 ->
+                candidates.add(w.dropLast(3) + "y")
+
+            // 复数：-ves 变 f/fe（仅处理常见情况）
+            w.endsWith("ves") && w.length > 3 -> {
+                candidates.add(w.dropLast(3) + "f")
+                candidates.add(w.dropLast(3) + "fe")
+            }
+
+            // 复数：-es 且不是 ss, us, is 结尾
+            w.endsWith("es") && w.length > 2 && !w.endsWith("ss") && !w.endsWith("us") && !w.endsWith("is") ->
+                candidates.add(w.dropLast(2))
+
+            // 复数：-s 结尾（排除特殊情况）
+            w.endsWith("s") && w.length > 1 && !w.endsWith("ss") && !w.endsWith("us") &&
+                    !w.endsWith("is") && !w.endsWith("es") ->
+                candidates.add(w.dropLast(1))
+
+            // 现在分词：-ing
             w.endsWith("ing") && w.length > 3 -> {
-                candidates.add(w.dropLast(3))                                          // playing -> play
-                if (w.length > 4 && w[w.length-4] == w[w.length-5])                    // running -> run
-                    candidates.add(w.dropLast(4))
+                // 直接去 ing
+                val stem = w.dropLast(3)
+                candidates.add(stem)
+                // 处理双写辅音的情况（如 running -> run）
+                if (stem.length >= 3 && stem.last() == stem[stem.length - 2]) {
+                    candidates.add(stem.dropLast(1))
+                }
+                // 处理 -ie 结尾变 y（如 dying -> die，但 dy -> 不处理；lying -> ly 不合理，跳过）
+                if (stem.endsWith("ie")) {
+                    candidates.add(stem.dropLast(2) + "y")
+                }
             }
+
+            // 过去式：-ed
             w.endsWith("ed") && w.length > 2 -> {
-                candidates.add(w.dropLast(2))                                          // played -> play
-                if (w.length > 3 && w[w.length-3] == w[w.length-4])                    // stopped -> stop
-                    candidates.add(w.dropLast(3))
+                val stem = w.dropLast(2)
+                candidates.add(stem)
+                // 处理去 e（如 agreed -> agree）
+                if (stem.endsWith("e")) {
+                    candidates.add(stem.dropLast(1))
+                }
+                // 处理双写辅音（如 stopped -> stop）
+                if (stem.length >= 2 && stem.last() == stem[stem.length - 2]) {
+                    candidates.add(stem.dropLast(1))
+                }
+                // 处理 y 变 i（如 studied -> study）
+                if (stem.endsWith("i")) {
+                    candidates.add(stem.dropLast(1) + "y")
+                }
             }
-            w.endsWith("er") && w.length > 2 -> candidates.add(w.dropLast(2))          // smaller -> small
-            w.endsWith("est") && w.length > 3 -> candidates.add(w.dropLast(3))         // smallest -> small
+
+            // 比较级：-er
+            w.endsWith("er") && w.length > 2 -> {
+                val stem = w.dropLast(2)
+                candidates.add(stem)
+                // 处理双写辅音（如 bigger -> big）
+                if (stem.length >= 2 && stem.last() == stem[stem.length - 2]) {
+                    candidates.add(stem.dropLast(1))
+                }
+                // 处理 y 变 i（如 happier -> happy）
+                if (stem.endsWith("i")) {
+                    candidates.add(stem.dropLast(1) + "y")
+                }
+            }
+
+            // 最高级：-est
+            w.endsWith("est") && w.length > 3 -> {
+                val stem = w.dropLast(3)
+                candidates.add(stem)
+                // 处理双写辅音（如 biggest -> big）
+                if (stem.length >= 2 && stem.last() == stem[stem.length - 2]) {
+                    candidates.add(stem.dropLast(1))
+                }
+                // 处理 y 变 i（如 happiest -> happy）
+                if (stem.endsWith("i")) {
+                    candidates.add(stem.dropLast(1) + "y")
+                }
+            }
+
+            // 第三人称单数：-es 规则已在上方覆盖，-ies 单独处理
+            // 形容词派生（可选，根据需求决定是否保留）
+            // w.endsWith("ful") && w.length > 3 -> candidates.add(w.dropLast(3))
+            // w.endsWith("less") && w.length > 4 -> candidates.add(w.dropLast(4))
         }
+
+        // 去重并保持顺序
         return candidates.distinct()
     }
 
