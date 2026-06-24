@@ -34,6 +34,7 @@
             app:use_controller="false"
             app:resize_mode="fit" />
 
+        <!-- 进度条 -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="4dp"
@@ -64,15 +65,37 @@
         android:maxLines="3"
         android:ellipsize="end" />
 
-    <!-- 字幕列表标题 -->
-    <TextView
+    <!-- 字幕列表标题栏（带开关） -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="📝 字幕列表 (点击任意字幕)"
-        android:textColor="#FFD700"
-        android:textSize="14sp"
+        android:orientation="horizontal"
         android:padding="8dp"
-        android:background="#2a2a2a" />
+        android:background="#2a2a2a"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="📝 字幕列表 (点击任意字幕)"
+            android:textColor="#FFD700"
+            android:textSize="14sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="显示字幕"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:layout_marginEnd="8dp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switchShowSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true" />
+    </LinearLayout>
 
     <!-- 字幕列表 RecyclerView -->
     <androidx.recyclerview.widget.RecyclerView

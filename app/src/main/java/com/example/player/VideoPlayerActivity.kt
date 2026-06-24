@@ -14,6 +14,7 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -31,6 +32,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     private lateinit var rvSubtitles: RecyclerView
     private lateinit var rvMeanings: RecyclerView
     private lateinit var progressFill: View
+    private lateinit var switchShowSubtitle: SwitchCompat
     private lateinit var adapter: SubtitleAdapter
     private lateinit var meaningsAdapter: RareWordAdapter
 
@@ -40,6 +42,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     private var currentPlayingPos = -1
 
     private lateinit var db: SQLiteDatabase
+    private lateinit var prefs: android.content.SharedPreferences
     private val backgroundThread = HandlerThread("WordLookup").apply { start() }
     private val backgroundHandler = Handler(backgroundThread.looper)
     private val uiHandler = Handler(Looper.getMainLooper())
@@ -54,6 +57,19 @@ class VideoPlayerActivity : AppCompatActivity() {
         rvSubtitles = findViewById(R.id.rvSubtitles)
         rvMeanings = findViewById(R.id.rvMeanings)
         progressFill = findViewById(R.id.progressFill)
+        switchShowSubtitle = findViewById(R.id.switchShowSubtitle)
+
+        // 初始化 SharedPreferences
+        prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        val isChecked = prefs.getBoolean("show_subtitle", true)
+        switchShowSubtitle.isChecked = isChecked
+        tvCurrentSubtitle.visibility = if (isChecked) View.VISIBLE else View.GONE
+
+        // 开关监听
+        switchShowSubtitle.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("show_subtitle", isChecked).apply()
+            tvCurrentSubtitle.visibility = if (isChecked) View.VISIBLE else View.GONE
+        }
 
         val path = intent.getStringExtra("video_path") ?: return finish()
         val name = intent.getStringExtra("video_name") ?: "视频"
@@ -218,7 +234,6 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
     }
 
-
     /**
      * 返回候选词列表（原词 + 可能的原形），顺序为原词优先
      */
@@ -306,11 +321,6 @@ class VideoPlayerActivity : AppCompatActivity() {
                     candidates.add(stem.dropLast(1) + "y")
                 }
             }
-
-            // 第三人称单数：-es 规则已在上方覆盖，-ies 单独处理
-            // 形容词派生（可选，根据需求决定是否保留）
-            // w.endsWith("ful") && w.length > 3 -> candidates.add(w.dropLast(3))
-            // w.endsWith("less") && w.length > 4 -> candidates.add(w.dropLast(4))
         }
 
         // 去重并保持顺序
@@ -323,7 +333,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             var cursor: Cursor? = null
             try {
                 cursor = db.query(
-                    "englishwords",                // 你的表名
+                    "englishwords",
                     arrayOf("word", "pronunciation", "meaning"),
                     "LOWER(word) = LOWER(?)",
                     arrayOf(candidate),
@@ -332,7 +342,7 @@ class VideoPlayerActivity : AppCompatActivity() {
                 if (cursor != null && cursor.moveToFirst()) {
                     val pronounce = cursor.getString(1)
                     val meaning = cursor.getString(2)
-                    return MeaningItem(originalWord, pronounce, meaning)   // 单词显示原始形式
+                    return MeaningItem(originalWord, pronounce, meaning)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
