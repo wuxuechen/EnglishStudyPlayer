@@ -3,13 +3,12 @@ package com.example.player
 import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
-import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
-import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
@@ -63,12 +62,14 @@ class VideoPlayerActivity : AppCompatActivity() {
         prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val isChecked = prefs.getBoolean("show_subtitle", true)
         switchShowSubtitle.isChecked = isChecked
-        tvCurrentSubtitle.visibility = if (isChecked) View.VISIBLE else View.GONE
+
+        // 确保 tvCurrentSubtitle 始终可见
+        tvCurrentSubtitle.visibility = View.VISIBLE
 
         // 开关监听
         switchShowSubtitle.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean("show_subtitle", isChecked).apply()
-            tvCurrentSubtitle.visibility = if (isChecked) View.VISIBLE else View.GONE
+            updateCurrentSubtitleDisplay()
         }
 
         val path = intent.getStringExtra("video_path") ?: return finish()
@@ -90,18 +91,61 @@ class VideoPlayerActivity : AppCompatActivity() {
         initPlayer()
         loadSubtitles()
 
-        tvCurrentSubtitle.setOnClickListener {
-            if (currentPlayingPos >= 0 && currentPlayingPos < subtitles.size) {
-                val currentSub = subtitles[currentPlayingPos]
-                playSubtitle(currentSub, currentPlayingPos)
-            } else {
-                Toast.makeText(this, "没有正在播放的字幕", Toast.LENGTH_SHORT).show()
-            }
-        }
+        // 先设置默认提示
+        tvCurrentSubtitle.text = "加载字幕中..."
+        updateCurrentSubtitleDisplay()
 
         meaningsAdapter = RareWordAdapter()
         rvMeanings.layoutManager = LinearLayoutManager(this)
         rvMeanings.adapter = meaningsAdapter
+
+        // 🔥 核心：点击 tvCurrentSubtitle 只播放，绝不改变开关状态
+        tvCurrentSubtitle.setOnClickListener {
+            if (currentPlayingPos >= 0 && currentPlayingPos < subtitles.size) {
+                val currentSub = subtitles[currentPlayingPos]
+                playSubtitle(currentSub, currentPlayingPos)
+            } else if (subtitles.isNotEmpty()) {
+                playSubtitle(subtitles[0], 0)
+            } else {
+                Toast.makeText(this, "没有可播放的字幕", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
+     * 根据开关状态更新 tvCurrentSubtitle 的显示内容
+     * 开关关闭时：固定显示提示文字（粗体、浅灰色）
+     * 开关打开时：显示当前字幕（白色、常规字体）
+     */
+    private fun updateCurrentSubtitleDisplay() {
+        // 确保 tvCurrentSubtitle 可见
+        tvCurrentSubtitle.visibility = View.VISIBLE
+
+        if (switchShowSubtitle.isChecked) {
+            // ✅ 字幕打开模式：显示当前播放的字幕文本
+            when {
+                currentPlayingPos >= 0 && currentPlayingPos < subtitles.size -> {
+                    tvCurrentSubtitle.text = subtitles[currentPlayingPos].text
+                }
+                subtitles.isNotEmpty() -> {
+                    tvCurrentSubtitle.text = "点击下方字幕开始播放"
+                }
+                else -> {
+                    tvCurrentSubtitle.text = "暂无字幕"
+                }
+            }
+            tvCurrentSubtitle.setTextColor(0xFFFFFFFF.toInt()) // 白色
+            tvCurrentSubtitle.textSize = 16f
+            tvCurrentSubtitle.setTypeface(null, android.graphics.Typeface.NORMAL) // 常规字体
+            tvCurrentSubtitle.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        } else {
+            // ❌ 字幕关闭模式：固定显示提示文字（粗体、浅灰色）
+            tvCurrentSubtitle.text = "subtitle was closed\nclick here to replay"
+            tvCurrentSubtitle.setTextColor(0xFFAAAAAA.toInt()) // 浅灰色
+            tvCurrentSubtitle.textSize = 16f
+            tvCurrentSubtitle.setTypeface(null, android.graphics.Typeface.BOLD) // 粗体
+            tvCurrentSubtitle.gravity = Gravity.CENTER
+        }
     }
 
     private fun initDatabase() {
@@ -133,8 +177,11 @@ class VideoPlayerActivity : AppCompatActivity() {
                 if (subtitles.isNotEmpty()) {
                     setupRecyclerView()
                     Toast.makeText(this, "已加载 ${subtitles.size} 条字幕", Toast.LENGTH_SHORT).show()
+                    // 加载完成后更新显示
+                    updateCurrentSubtitleDisplay()
                 } else {
                     Toast.makeText(this, "无字幕", Toast.LENGTH_SHORT).show()
+                    tvCurrentSubtitle.text = "未找到字幕文件"
                 }
             }
         }.start()
@@ -151,7 +198,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun playSubtitle(sub: Subtitle, pos: Int) {
         val player = exoPlayer ?: return
 
-        tvCurrentSubtitle.text = sub.text
+        currentPlayingPos = pos
 
         val mediaItem = MediaItem.Builder()
             .setUri(Uri.fromFile(videoFile))
@@ -167,8 +214,10 @@ class VideoPlayerActivity : AppCompatActivity() {
         player.prepare()
         player.play()
 
-        currentPlayingPos = pos
         adapter.setCurrentPlayingPosition(pos)
+
+        // 🔥 更新显示（根据当前开关状态）
+        updateCurrentSubtitleDisplay()
 
         updateProgressBar(pos)
 
@@ -263,14 +312,11 @@ class VideoPlayerActivity : AppCompatActivity() {
 
             // 现在分词：-ing
             w.endsWith("ing") && w.length > 3 -> {
-                // 直接去 ing
                 val stem = w.dropLast(3)
                 candidates.add(stem)
-                // 处理双写辅音的情况（如 running -> run）
                 if (stem.length >= 3 && stem.last() == stem[stem.length - 2]) {
                     candidates.add(stem.dropLast(1))
                 }
-                // 处理 -ie 结尾变 y（如 dying -> die，但 dy -> 不处理；lying -> ly 不合理，跳过）
                 if (stem.endsWith("ie")) {
                     candidates.add(stem.dropLast(2) + "y")
                 }
@@ -280,15 +326,12 @@ class VideoPlayerActivity : AppCompatActivity() {
             w.endsWith("ed") && w.length > 2 -> {
                 val stem = w.dropLast(2)
                 candidates.add(stem)
-                // 处理去 e（如 agreed -> agree）
                 if (stem.endsWith("e")) {
                     candidates.add(stem.dropLast(1))
                 }
-                // 处理双写辅音（如 stopped -> stop）
                 if (stem.length >= 2 && stem.last() == stem[stem.length - 2]) {
                     candidates.add(stem.dropLast(1))
                 }
-                // 处理 y 变 i（如 studied -> study）
                 if (stem.endsWith("i")) {
                     candidates.add(stem.dropLast(1) + "y")
                 }
@@ -298,11 +341,9 @@ class VideoPlayerActivity : AppCompatActivity() {
             w.endsWith("er") && w.length > 2 -> {
                 val stem = w.dropLast(2)
                 candidates.add(stem)
-                // 处理双写辅音（如 bigger -> big）
                 if (stem.length >= 2 && stem.last() == stem[stem.length - 2]) {
                     candidates.add(stem.dropLast(1))
                 }
-                // 处理 y 变 i（如 happier -> happy）
                 if (stem.endsWith("i")) {
                     candidates.add(stem.dropLast(1) + "y")
                 }
@@ -312,18 +353,15 @@ class VideoPlayerActivity : AppCompatActivity() {
             w.endsWith("est") && w.length > 3 -> {
                 val stem = w.dropLast(3)
                 candidates.add(stem)
-                // 处理双写辅音（如 biggest -> big）
                 if (stem.length >= 2 && stem.last() == stem[stem.length - 2]) {
                     candidates.add(stem.dropLast(1))
                 }
-                // 处理 y 变 i（如 happiest -> happy）
                 if (stem.endsWith("i")) {
                     candidates.add(stem.dropLast(1) + "y")
                 }
             }
         }
 
-        // 去重并保持顺序
         return candidates.distinct()
     }
 
